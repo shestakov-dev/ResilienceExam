@@ -1,22 +1,24 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createApp, PRIMARY_URL, FALLBACK_URL } = require('../src/app');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createApp, PRIMARY_URL, FALLBACK_URL } from '../src/app';
 
-function makeResponse(payload, status = 200) {
+function makeResponse(payload: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => payload
-  };
+  } as Response;
 }
 
-async function startApp(app) {
-  return new Promise((resolve, reject) => {
+async function startApp(app: ReturnType<typeof createApp>) {
+  return await new Promise<{ server: ReturnType<typeof app.listen>; baseUrl: string }>((resolve, reject) => {
     const server = app.listen(0, () => {
       const address = server.address();
+      const typedAddress = address as { port: number };
+
       resolve({
         server,
-        baseUrl: `http://127.0.0.1:${address.port}`
+        baseUrl: `http://127.0.0.1:${typedAddress.port}`
       });
     });
 
@@ -27,20 +29,21 @@ async function startApp(app) {
 }
 
 test('uses fallback and increments metric when failPrimary is injected', async () => {
-  const fetchCalls = [];
-  const fetchImpl = async (url) => {
-    fetchCalls.push(url);
+  const fetchCalls: string[] = [];
+  const fetchImpl: typeof fetch = async (url) => {
+    const normalizedUrl = String(url);
+    fetchCalls.push(normalizedUrl);
 
-    if (url === FALLBACK_URL) {
+    if (normalizedUrl === FALLBACK_URL) {
       return makeResponse({ todos: [{ id: 101, todo: 'fallback todo' }] });
     }
 
     return makeResponse({ error: 'primary failed' }, 500);
   };
 
-  const logs = [];
+  const logs: string[] = [];
   const logger = {
-    error: (message) => logs.push(message)
+    error: (message: string) => logs.push(message)
   };
 
   const app = createApp({ fetchImpl, logger });
@@ -48,7 +51,7 @@ test('uses fallback and increments metric when failPrimary is injected', async (
 
   try {
     const response = await fetch(`${baseUrl}/todos?failPrimary=true`);
-    const body = await response.json();
+    const body = (await response.json()) as { source: string; todos: unknown[] };
 
     assert.equal(response.status, 200);
     assert.equal(body.source, 'fallback');
@@ -66,8 +69,10 @@ test('uses fallback and increments metric when failPrimary is injected', async (
 });
 
 test('serves primary data and leaves fallback counter at zero', async () => {
-  const fetchImpl = async (url) => {
-    if (url === PRIMARY_URL) {
+  const fetchImpl: typeof fetch = async (url) => {
+    const normalizedUrl = String(url);
+
+    if (normalizedUrl === PRIMARY_URL) {
       return makeResponse([{ id: 1, title: 'primary todo' }]);
     }
 
@@ -79,7 +84,7 @@ test('serves primary data and leaves fallback counter at zero', async () => {
 
   try {
     const response = await fetch(`${baseUrl}/todos`);
-    const body = await response.json();
+    const body = (await response.json()) as { source: string; todos: unknown[] };
 
     assert.equal(response.status, 200);
     assert.equal(body.source, 'primary');

@@ -1,10 +1,19 @@
-const express = require('express');
-const { Counter, Registry, collectDefaultMetrics } = require('prom-client');
+import express, { type Request, type Response } from 'express';
+import { Counter, Registry, collectDefaultMetrics } from 'prom-client';
 
-const PRIMARY_URL = 'https://jsonplaceholder.typicode.com/todos';
-const FALLBACK_URL = 'https://dummyjson.com/todos';
+export const PRIMARY_URL = 'https://jsonplaceholder.typicode.com/todos';
+export const FALLBACK_URL = 'https://dummyjson.com/todos';
 
-function isFailureInjected(value) {
+type FetchLike = typeof fetch;
+
+type AppOptions = {
+  fetchImpl?: FetchLike;
+  logger?: Pick<Console, 'error'>;
+};
+
+type TodosPayload = unknown[] | { todos?: unknown[] };
+
+export function isFailureInjected(value: unknown): boolean {
   if (value == null) {
     return false;
   }
@@ -12,17 +21,17 @@ function isFailureInjected(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
-async function fetchJson(fetchImpl, url) {
+async function fetchJson(fetchImpl: FetchLike, url: string): Promise<TodosPayload> {
   const response = await fetchImpl(url);
 
   if (!response.ok) {
     throw new Error(`Request to ${url} failed with status ${response.status}`);
   }
 
-  return response.json();
+  return (await response.json()) as TodosPayload;
 }
 
-function normalizeTodos(payload) {
+function normalizeTodos(payload: TodosPayload): unknown[] {
   if (Array.isArray(payload)) {
     return payload;
   }
@@ -34,7 +43,7 @@ function normalizeTodos(payload) {
   return [];
 }
 
-function createApp({ fetchImpl = fetch, logger = console } = {}) {
+export function createApp({ fetchImpl = fetch, logger = console }: AppOptions = {}) {
   const app = express();
   const registry = new Registry();
 
@@ -46,7 +55,7 @@ function createApp({ fetchImpl = fetch, logger = console } = {}) {
     registers: [registry]
   });
 
-  app.get('/todos', async (req, res) => {
+  app.get('/todos', async (req: Request, res: Response) => {
     try {
       if (isFailureInjected(req.query.failPrimary)) {
         throw new Error('Primary API failure intentionally injected via failPrimary query param');
@@ -59,6 +68,7 @@ function createApp({ fetchImpl = fetch, logger = console } = {}) {
         todos: normalizeTodos(primaryPayload)
       });
     } catch (primaryError) {
+      const typedPrimaryError = primaryError as Error;
       fallbackTriggerCounter.inc();
 
       logger.error(
@@ -68,7 +78,7 @@ function createApp({ fetchImpl = fetch, logger = console } = {}) {
           route: '/todos',
           primaryUrl: PRIMARY_URL,
           fallbackUrl: FALLBACK_URL,
-          reason: primaryError.message
+          reason: typedPrimaryError.message
         })
       );
 
@@ -80,23 +90,25 @@ function createApp({ fetchImpl = fetch, logger = console } = {}) {
           todos: normalizeTodos(fallbackPayload)
         });
       } catch (fallbackError) {
+        const typedFallbackError = fallbackError as Error;
+
         return res.status(502).json({
           error: 'Both primary and fallback providers failed',
           details: {
-            primary: primaryError.message,
-            fallback: fallbackError.message
+            primary: typedPrimaryError.message,
+            fallback: typedFallbackError.message
           }
         });
       }
     }
   });
 
-  app.get('/metrics', async (_req, res) => {
+  app.get('/metrics', async (_req: Request, res: Response) => {
     res.set('Content-Type', registry.contentType);
     res.send(await registry.metrics());
   });
 
-  app.get('/health', (_req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok' });
   });
 
@@ -104,10 +116,3 @@ function createApp({ fetchImpl = fetch, logger = console } = {}) {
 
   return app;
 }
-
-module.exports = {
-  createApp,
-  isFailureInjected,
-  PRIMARY_URL,
-  FALLBACK_URL
-};

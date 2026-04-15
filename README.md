@@ -1,6 +1,6 @@
 # ResilienceExam
 
-## Component: `src/app.js` and `src/server.js`
+## Component: `src/app.ts` and `src/server.ts`
 **Purpose:**
 - Implements a resilient `/todos` route with **primary** (`jsonplaceholder`) + **fallback** (`dummyjson`) API calls.
 - Supports an intentional failure toggle (`?failPrimary=true`) to force fallback behavior for demos/testing.
