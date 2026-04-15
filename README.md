@@ -57,6 +57,10 @@
    ```
 4. Click **Execute** then switch to **Graph** view.
 
+## Prometheus graph
+
+![fallback_trigger_total graph](graph.png)
+
 ## How to generate fallback spikes and take a screenshot
 
 1. Ensure stack is running (`docker compose up --build`).

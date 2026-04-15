@@ -2,7 +2,6 @@ FROM node:22-alpine AS base
 
 WORKDIR /usr/src/app
 
-# Use the repository lockfile through corepack-managed pnpm.
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 FROM base AS build
