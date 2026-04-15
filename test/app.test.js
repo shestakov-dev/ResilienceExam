@@ -11,13 +11,17 @@ function makeResponse(payload, status = 200) {
 }
 
 async function startApp(app) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const server = app.listen(0, () => {
       const address = server.address();
       resolve({
         server,
         baseUrl: `http://127.0.0.1:${address.port}`
       });
+    });
+
+    server.on('error', (error) => {
+      reject(error);
     });
   });
 }
@@ -31,7 +35,7 @@ test('uses fallback and increments metric when failPrimary is injected', async (
       return makeResponse({ todos: [{ id: 101, todo: 'fallback todo' }] });
     }
 
-    return makeResponse([], 500);
+    return makeResponse({ error: 'primary failed' }, 500);
   };
 
   const logs = [];
@@ -67,7 +71,7 @@ test('serves primary data and leaves fallback counter at zero', async () => {
       return makeResponse([{ id: 1, title: 'primary todo' }]);
     }
 
-    return makeResponse([], 500);
+    return makeResponse({ error: 'unexpected fallback call' }, 500);
   };
 
   const app = createApp({ fetchImpl });
