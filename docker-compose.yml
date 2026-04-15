@@ -1,0 +1,16 @@
+services:
+ app:
+  build: .
+  ports:
+   - "3000:3000"
+
+ prometheus:
+  image: prom/prometheus:v2.54.1
+  volumes:
+   - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  command:
+   - "--config.file=/etc/prometheus/prometheus.yml"
+  ports:
+   - "9090:9090"
+  depends_on:
+   - app
